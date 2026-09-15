@@ -71,3 +71,6 @@ If you find the code is valuable, please use this citation.
 }
 ```
 
+
+#### You need to specify the model you use e.g gpt-4o
+
