@@ -140,7 +140,7 @@ def simulation(args):
         daily_agent_records = []
         for agent in all_agents:
             loan = agent.plan_loan(date, stock_a.get_price(), stock_b.get_price(), last_day_forum_message)
-            daily_agent_records.append(AgentRecordDaily(date, agent.order, loan))
+            daily_agent_records.append(AgentRecordDaily(agent.order, date, loan))
 
         for session in range(1, util.TOTAL_SESSION + 1):
             log.logger.debug(f"SESSION {session}")
@@ -203,6 +203,12 @@ def simulation(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="gemini-pro", help="model name")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=util.resolve_model_name(util.DEFAULT_MODEL),
+        help="model name",
+    )
     args = parser.parse_args()
+    args.model = util.resolve_model_name(args.model)
     simulation(args)

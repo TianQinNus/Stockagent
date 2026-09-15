@@ -4,7 +4,6 @@ import openai
 import tiktoken
 import random
 import requests
-import google.generativeai as genai
 
 import util
 from log.custom_logger import log
@@ -67,37 +66,49 @@ class Agent:
         self.quit = False
 
     def run_api(self, prompt, temperature: float = 1):
-        if 'gpt' in self.model:
+        model_name = self.model.lower()
+        if 'gpt' in model_name:
             return self.run_api_gpt(prompt, temperature)
-        elif 'gemini' in self.model:
+        elif 'gemini' in model_name:
             return self.run_api_gemini(prompt, temperature)
+        raise ValueError(f"Unsupported model provider for model: {self.model}")
 
     def run_api_gemini(self, prompt, temperature: float = 1):
-        genai.configure(api_key=util.GOOGLE_API_KEY, transport='rest')
-        generation_config = genai.types.GenerationConfig(
+        # Import lazily so GPT-only runs do not load Google dependencies.
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=util.GOOGLE_API_KEY)
+        generation_config = types.GenerateContentConfig(
             candidate_count=1,
             temperature=temperature)
-        model = genai.GenerativeModel(self.model)
-        self.chat_history.append({"role": "user", "parts": [prompt]})
+        self.chat_history.append(types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=prompt)],
+        ))
         max_retry = 2
         retry = 0
         while retry < max_retry:
             try:
-                response = model.generate_content(contents=self.chat_history, generation_config=generation_config)
-                new_message_dict = {"role": 'model', "parts": [response.text]}
-                self.chat_history.append(new_message_dict)
+                response = client.models.generate_content(
+                    model=self.model,
+                    contents=self.chat_history,
+                    config=generation_config,
+                )
+                self.chat_history.append(response.candidates[0].content)
+                client.close()
                 return response.text
             except Exception as e:
                 log.logger.warning("Gemini api retry...{}".format(e))
                 retry += 1
                 time.sleep(1)
         log.logger.error("ERROR: GEMINI API FAILED. SKIP THIS INTERACTION.")
+        client.close()
         return ""
 
 
     def run_api_gpt(self, prompt, temperature: float = 1):
-        openai.api_key = util.OPENAI_API_KEY
-        client = openai.OpenAI(api_key=openai.api_key)
+        client = openai.OpenAI(api_key=util.OPENAI_API_KEY)
         self.chat_history.append({"role": "user", "content": prompt})
         max_retry = 2
         retry = 0
@@ -116,12 +127,14 @@ class Agent:
                                     "content": response.choices[0].message.content}
                 self.chat_history.append(new_message_dict)
                 resp = response.choices[0].message.content
+                client.close()
                 return resp
             except openai.OpenAIError as e:
                 log.logger.warning("OpenAI api retry...{}".format(e))
                 retry += 1
                 time.sleep(1)
         log.logger.error("ERROR: OPENAI API FAILED. SKIP THIS INTERACTION.")
+        client.close()
         return ""
 
     def get_total_proper(self, stock_a_price, stock_b_price):
@@ -205,7 +218,7 @@ class Agent:
             resp = self.run_api(format_prompt(LOAN_RETRY_PROMPT, {"fail_response": fail_response}))
             if resp == "":
                 return {"loan": "no"}
-            loan_format_check, fail_response, loan = self.secretary.check_loan(date, resp)
+            loan_format_check, fail_response, loan = self.secretary.check_loan(resp, max_loan)
 
         if loan["loan"] == "yes":
             loan["repayment_date"] = date + util.LOAN_TYPE_DATE[loan["loan_type"]]  # add loan repayment_date
@@ -281,7 +294,7 @@ class Agent:
             # log.logger.debug("Action format check failed because of these issues: {}".format(fail_response))
             try_times += 1
             if try_times > MAX_TRY_TIMES:
-                log.logger.warning("WARNING: Action format try times > MAX_TRY_TIMES. Skip as no loan today.")
+                log.logger.warning("WARNING: Action format try times > MAX_TRY_TIMES. Skip trading action today.")
                 action = {"action_type": "no"}
                 break
 
@@ -423,5 +436,3 @@ class Agent:
                 return {"buy_A": "no", "buy_B": "no", "sell_A": "no", "sell_B": "no", "loan": "no"}
             format_check, fail_response, estimate = self.secretary.check_estimate(resp)
         return estimate
-
-

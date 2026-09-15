@@ -19,7 +19,7 @@ The Workflow of Trading Simulation Flow. There are four Phases, namely **Initial
 #### Environment
 
 ```
-conda create --name stockagent python=3.9
+conda create --name stockagent python=3.10
 conda activate stockagent
 
 git clone https://github.com/dhh1995/PromptCoder
@@ -54,7 +54,7 @@ You can choose a basic LLM and start simulation in one line:
 python main.py --model MODEL_NAME
 ```
 
-We set gemini-pro for default LLM.
+The default LLM is configured by `DEFAULT_MODEL` (or `util.DEFAULT_MODEL`).
 
 #### About ’procoder‘
 
@@ -70,5 +70,4 @@ If you find the code is valuable, please use this citation.
   year={2024}
 }
 ```
-
 
